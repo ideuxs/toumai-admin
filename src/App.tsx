@@ -56,17 +56,92 @@ const App: React.FC = () => {
   };
 
   const handleAction = async (id: number, action: 'approved' | 'declined') => {
-    const { error } = await supabase
-      .from('product')
-      .update({ etat: action })
-      .eq('id_product', id);
+    try {
+      console.log('ID du produit reçu :', id);
 
-    if (error) {
-      console.error('Erreur lors de la mise à jour:', error);
-    } else {
+      // 1️⃣ Récupération du produit pour obtenir son owner_id
+      const { data: product, error: fetchError } = await supabase
+        .from('product')
+        .select('owner_id')
+        .eq('id_product', id)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error('Erreur lors de la récupération du produit :', fetchError);
+        return;
+      }
+
+      if (!product) {
+        console.error('Produit introuvable ou non autorisé.');
+        return;
+      }
+
+      // 2️⃣ Mise à jour de l’état du produit
+      const { data: updatedProduct, error: updateError } = await supabase
+        .from('product')
+        .update({ state: action })
+        .eq('id_product', id)
+        .select('owner_id, state, id_product,name')
+        .single();
+
+      if (updateError) {
+        console.error('Erreur lors de la mise à jour du produit :', updateError);
+        return;
+      }
+
+      console.log('Produit mis à jour :', updatedProduct);
+
+      // 3️⃣ Récupération des informations du propriétaire
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('expo_push_token, firstname')
+        .eq('id', updatedProduct.owner_id)
+        .single();
+
+      if (userError) {
+        console.error('Erreur lors de la récupération du propriétaire :', userError);
+        return;
+      }
+
+      if (!user?.expo_push_token) {
+        console.warn("L'utilisateur n’a pas de jeton Expo Push enregistré.");
+        return;
+      }
+
+      // 4️⃣ Préparation du message selon l’action
+      let message = '';
+      if (action === 'approved') {
+        message = `"${updatedProduct.name}" a été approuvée ✅. Elle est maintenant visible par tous les acheteurs de Naria.`;
+      } else if (action === 'declined') {
+        message = `Bonjour ${user.firstname}, ton annonce n’a malheureusement pas été approuvée. 😞`;
+      }
+
+      // 5️⃣ Envoi de la notification via ta Supabase Edge Function
+      const { error: notifyError } = await supabase.functions.invoke('send-notifications', {
+        body: {
+          expoPushToken: user.expo_push_token,
+          message,
+          id_product: updatedProduct.id_product
+        },
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (notifyError) {
+        console.error('Erreur lors de l’envoi de la notification :', notifyError);
+        return;
+      }
+
+      console.log(`Notification envoyée à ${user.firstname} (${action})`);
+
+      // 6️⃣ Rafraîchissement des données après traitement
       fetchAnnounces();
+
+    } catch (err) {
+      console.error('Erreur inattendue dans handleAction :', err);
     }
   };
+
+
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
