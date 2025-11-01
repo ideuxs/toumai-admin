@@ -108,7 +108,7 @@ const App: React.FC = () => {
     let title = 'Naria';
 
     if (action === 'approved') {
-      message = `Cette notif est destinée a Mario, si quelqu'un d'autre la voit qu'il me le dis svp.`;
+      message = `"${updatedProduct.name}" a été approuvée ✅. Elle est maintenant visible par tous les acheteurs de Naria.`;
     } else if (action === 'declined') {
       message = `Bonjour ${user.firstname}, ton annonce n’a malheureusement pas été approuvée. 😞`;
     }
