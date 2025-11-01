@@ -4,9 +4,9 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  root: 'src',      // Si ton code reste dans src
+  root: '.',          // racine du projet
   build: {
-    outDir: '../dist',  // Pour que le build sorte à la racine
+    outDir: 'dist',   // Vercel prendra dist
     emptyOutDir: true,
   },
   base: './',
