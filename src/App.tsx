@@ -123,7 +123,7 @@ const App: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          subId: updatedProduct.owner_id,
+          subID: updatedProduct.owner_id,
           appId: 32579,
           appToken: 'ujd5ONbA2looRjqMdayyHo',
           title: title,
