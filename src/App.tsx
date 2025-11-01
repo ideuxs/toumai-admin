@@ -105,30 +105,46 @@ const App: React.FC = () => {
 
     // 4️⃣ Préparation du message
     let message = '';
-    let title = 'Toumai Market';
+    let title = 'Naria';
 
     if (action === 'approved') {
-      message = `"${updatedProduct.name}" a été approuvée ✅. Elle est maintenant visible par tous les acheteurs de Naria.`;
+      message = `Cette notif est destinée a Mario, si quelqu'un d'autre la voit qu'il me le dis svp.`;
     } else if (action === 'declined') {
       message = `Bonjour ${user.firstname}, ton annonce n’a malheureusement pas été approuvée. 😞`;
     }
 
-    // 5️⃣ Envoi via la Supabase Edge Function
-    const { error: notifyError } = await supabase.functions.invoke('send-notifications', {
-      body: {
-        title,
-        message,
-        id_product: updatedProduct.id_product,
-      },
-      headers: { 'Accept': 'application/json' },
-    });
+    
+    console.log(updatedProduct.owner_id)
+    // 5️⃣ Envoi direct via Native Notify
+    try {
+      const response = await fetch('https://app.nativenotify.com/api/notification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subId: updatedProduct.owner_id,
+          appId: 32579,
+          appToken: 'ujd5ONbA2looRjqMdayyHo',
+          title: title,
+          body: message,
+          pushData: {
+            id_product: updatedProduct.id_product,
+            state: action,
+          },
+        }),
+      });
 
-    if (notifyError) {
-      console.error('Erreur lors de l’envoi de la notification :', notifyError);
-      return;
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Erreur API Native Notify: ${text}`);
+      }
+      console.log(response)
+      console.log(`✅ Notification envoyée à ${user.firstname} via Native Notify (${action})`);
+    } catch (notifyError) {
+      console.error('Erreur lors de l’envoi de la notification Native Notify:', notifyError);
     }
 
-    console.log(`✅ Notification envoyée à ${user.firstname} (${action})`);
 
     // 6️⃣ Rafraîchissement des annonces
     fetchAnnounces();
