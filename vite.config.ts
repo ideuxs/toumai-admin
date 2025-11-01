@@ -9,5 +9,5 @@ export default defineConfig({
     outDir: '../dist',  // Pour que le build sorte à la racine
     emptyOutDir: true,
   },
-  base: '/toumai-admin/',
+  base: './',
 })
