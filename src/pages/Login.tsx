@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
+import { useNavigate } from 'react-router-dom';
 import './Login.css';
 
-const Login: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
+const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Create floating shapes
@@ -42,7 +44,7 @@ const Login: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
       setError("Identifiants incorrects ou problème réseau.");
       setLoading(false);
     } else {
-      onLogin();
+      navigate('/admin');
     }
   };
 

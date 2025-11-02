@@ -3,8 +3,8 @@ import { CheckCircle, XCircle, Clock, Package, Filter } from 'lucide-react';
 import { supabase } from './services/supabaseClient';
 import AnnouncementCard from './components/AnnouncementCard';
 import AnnouncementModal from './components/AnnouncementModal';
-import Login from './pages/Login';
 import type { Announcement } from './types';
+import { useNavigate } from 'react-router-dom';
 import './App.css';
 
 const App: React.FC = () => {
@@ -15,18 +15,31 @@ const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
+    // Vérifie la session actuelle au chargement
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+      if (!session) {
+        navigate('/'); // 🔁 Redirige vers la page de login
+      } else {
+        setSession(session);
+      }
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+
+    // Écoute les changements de session (connexion / déconnexion)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setSession(session);
+      } else {
+        setSession(null);
+        navigate('/'); // 🔁 redirection propre seulement si déconnexion réelle
+      }
     });
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, []);
+
+    return () => subscription.unsubscribe();
+
+  }, [navigate]);
 
   useEffect(() => {
     if (session) fetchAnnounces();
@@ -154,11 +167,19 @@ const App: React.FC = () => {
   }
 };
 
+  if (!session) {
+    // Pendant le check de session, on peut afficher un loader
+    return <div className="loading">Chargement...</div>;
+  }
 
-
+  const goToReports = () => {
+    navigate('/reports');
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    setSession(null);
+    navigate('/');
   };
 
   const handleCardClick = (announcement: Announcement) => {
@@ -176,9 +197,6 @@ const App: React.FC = () => {
     ? announcements 
     : announcements.filter(a => a.state === activeTab);
 
-  if (!session) {
-    return <Login onLogin={() => supabase.auth.getSession().then(({ data: { session } }) => setSession(session))} />;
-  }
 
   if (loading) {
     return (
@@ -201,6 +219,9 @@ const App: React.FC = () => {
             <p className="header-subtitle">Gérez vos annonces en toute simplicité</p>
           </div>
           <div className="header-actions">
+            <button className="header-btn" onClick={goToReports}>
+              📋 Voir les signalements
+            </button>
             <button className="header-logout" onClick={handleLogout}>Déconnexion</button>
           </div>
         </div>

@@ -1,10 +1,20 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import App from './App';
+import Login from './pages/Login';
+import Reports from './pages/Reports'; // ta future page de signalements
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Login />} />
+        <Route path="/admin" element={<App />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </BrowserRouter>
   </React.StrictMode>
 );
