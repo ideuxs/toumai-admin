@@ -68,104 +68,115 @@ const App: React.FC = () => {
     setLoading(false);
   };
 
+  /**
+   * Modification de l'etat du produit et envoi de la notification
+   * 
+   * @param id 
+   * @param action 
+   * @returns 
+   */
   const handleAction = async (id: number, action: 'approved' | 'declined') => {
-  try {
-    console.log('ID du produit reçu :', id);
-
-    // 1️⃣ Récupération du produit
-    const { data: product, error: fetchError } = await supabase
-      .from('product')
-      .select('owner_id')
-      .eq('id_product', id)
-      .maybeSingle();
-
-    if (fetchError) {
-      console.error('Erreur lors de la récupération du produit :', fetchError);
-      return;
-    }
-
-    if (!product) {
-      console.error('Produit introuvable ou non autorisé.');
-      return;
-    }
-
-    // 2️⃣ Mise à jour du produit
-    const { data: updatedProduct, error: updateError } = await supabase
-      .from('product')
-      .update({ state: action })
-      .eq('id_product', id)
-      .select('owner_id, state, id_product, name')
-      .single();
-
-    if (updateError) {
-      console.error('Erreur lors de la mise à jour du produit :', updateError);
-      return;
-    }
-
-    console.log('Produit mis à jour :', updatedProduct);
-
-    // 3️⃣ Récupération du propriétaire
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('firstname')
-      .eq('id', updatedProduct.owner_id)
-      .single();
-
-    if (userError) {
-      console.error('Erreur lors de la récupération du propriétaire :', userError);
-      return;
-    }
-
-    // 4️⃣ Préparation du message
-    let message = '';
-    let title = 'Naria';
-
-    if (action === 'approved') {
-      message = `"${updatedProduct.name}" a été approuvée ✅. Elle est maintenant visible par tous les acheteurs de Naria.`;
-    } else if (action === 'declined') {
-      message = `Bonjour ${user.firstname}, ton annonce n’a malheureusement pas été approuvée. 😞`;
-    }
-
-    
-    console.log(updatedProduct.owner_id)
-    // 5️⃣ Envoi direct via Native Notify
     try {
-      const response = await fetch('https://app.nativenotify.com/api/notification', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          subID: updatedProduct.owner_id,
-          appId: 32579,
-          appToken: 'ujd5ONbA2looRjqMdayyHo',
-          title: title,
-          body: message,
-          pushData: {
-            id_product: updatedProduct.id_product,
-            state: action,
-          },
-        }),
-      });
+      console.log('ID du produit reçu :', id);
 
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`Erreur API Native Notify: ${text}`);
+      // Récupération du produit
+      const { data: product, error: fetchError } = await supabase
+        .from('product')
+        .select('owner_id')
+        .eq('id_product', id)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error('Erreur lors de la récupération du produit :', fetchError);
+        return;
       }
-      console.log(response)
-      console.log(`✅ Notification envoyée à ${user.firstname} via Native Notify (${action})`);
-    } catch (notifyError) {
-      console.error('Erreur lors de l’envoi de la notification Native Notify:', notifyError);
+
+      if (!product) {
+        console.error('Produit introuvable ou non autorisé.');
+        return;
+      }
+
+      // Mise à jour d'action de la table product
+      const { data: updatedProduct, error: updateError } = await supabase
+        .from('product')
+        .update({ state: action })
+        .eq('id_product', id)
+        .select('owner_id, state, id_product, name')
+        .single();
+
+      if (updateError) {
+        console.error('Erreur lors de la mise à jour du produit :', updateError);
+        return;
+      }
+
+      // Récupération du prénom de la personne ayant posté l'annonce
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('firstname')
+        .eq('id', updatedProduct.owner_id)
+        .single();
+
+      if (userError) {
+        console.error('Erreur lors de la récupération du propriétaire :', userError);
+        return;
+      }
+
+      // Préparation du message à envoyer en notification
+      let message = '';
+      let title = 'Naria';
+      let subtitle = '';
+
+      if (action === 'approved') {
+        subtitle = "Excellente nouvelle ! 🥳";
+        message = `Ton annonce "${updatedProduct.name}" a été validée et est en ligne et visible par les acheteurs sur Naria.`;
+      } else if (action === 'declined') {
+        subtitle = "Publication refusée";
+        message = `Bonjour ${user.firstname}, ton annonce "${updatedProduct.name}" a été refusée. Vérifie les conditions et retente ta chance !`;
+      }
+
+      // Envoi de la notification en appelant la Edge functions qui permet d'appeler le service apple.
+      try {
+        const { data: userTokens, error: tokenError } = await supabase
+          .from('users')
+          .select('token_apn')
+          .eq('id', updatedProduct.owner_id)
+          .single();
+
+        if (tokenError) {
+          console.error('Erreur récupération token:', tokenError);
+          return;
+        }
+
+        const deviceToken = userTokens?.token_apn;
+        if (!deviceToken) {
+          console.log(`⚠️ Aucun token APNs trouvé pour ${user.firstname}`);
+          return;
+        }
+
+        await fetch('https://rywcekthoiykxecltmhq.supabase.co/functions/v1/send-apn-notifications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({
+            deviceToken,
+            title,
+            subtitle,
+            body: message,
+          }),
+        });
+
+      } catch (notifyError) {
+        console.error('Erreur lors de l’envoi notification APNs:', notifyError);
+      }
+
+      fetchAnnounces();
+
+    } catch (err) {
+      console.error('Erreur inattendue dans handleAction :', err);
     }
-
-
-    // 6️⃣ Rafraîchissement des annonces
-    fetchAnnounces();
-
-  } catch (err) {
-    console.error('Erreur inattendue dans handleAction :', err);
-  }
-};
+  };
 
   if (!session) {
     // Pendant le check de session, on peut afficher un loader
