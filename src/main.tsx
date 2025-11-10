@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import Reports from './pages/Reports'; // ta future page de signalements
 import './index.css';
 import ForgotPassword from './pages/ForgotPassword';
+import GlobalNotification from './pages/GlobalNotification';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
@@ -16,6 +17,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
         <Route path="/reports" element={<Reports />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="*" element={<Navigate to="/" />} />
+        <Route path='/global-notifications' element={<GlobalNotification/>}/>
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

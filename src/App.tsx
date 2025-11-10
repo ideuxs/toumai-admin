@@ -187,6 +187,10 @@ const App: React.FC = () => {
     navigate('/reports');
   };
 
+   const goToNotifications = () => {
+    navigate('/global-notifications');
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
@@ -232,6 +236,20 @@ const App: React.FC = () => {
           <div className="header-actions">
             <button className="header-btn" onClick={goToReports}>
               📋 Voir les signalements
+            </button>
+            <button
+              onClick={goToNotifications}
+              style={{
+                backgroundColor: '#28a745',
+                color: 'white',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                border: 'none',
+                fontSize: '16px',
+              }}
+            >
+              Envoyer une notification
             </button>
             <button className="header-logout" onClick={handleLogout}>Déconnexion</button>
           </div>

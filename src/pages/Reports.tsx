@@ -192,20 +192,6 @@ const Reports: React.FC = () => {
         <div className="modal-overlay" onClick={handleCloseModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h2>Détails du signalement</h2>
-            
-            <div className="modal-section">
-              <h3>Signalement</h3>
-              <p><strong>ID :</strong> #{selectedReport.id}</p>
-              <p><strong>Catégorie :</strong> {selectedReport.category_report}</p>
-              <p><strong>Raison :</strong> {selectedReport.reason}</p>
-              <p><strong>Date :</strong> {new Date(selectedReport.created_at).toLocaleString('fr-FR')}</p>
-            </div>
-
-            <div className="modal-section">
-              <h3>Utilisateur</h3>
-              <p><strong>Nom :</strong> {selectedReport.user?.firstname} {selectedReport.user?.lastname}</p>
-              <p><strong>Email :</strong> {selectedReport.user?.email}</p>
-            </div>
 
             <div className="modal-section">
               <h3>Annonce concernée</h3>
@@ -219,6 +205,20 @@ const Reports: React.FC = () => {
               {selectedReport.product?.price && (
                 <p><strong>Prix :</strong> {selectedReport.product?.price} €</p>
               )}
+            </div>
+            
+            <div className="modal-section">
+              <h3>Signalement</h3>
+              <p><strong>ID :</strong> #{selectedReport.id}</p>
+              <p><strong>Catégorie :</strong> {selectedReport.category_report}</p>
+              <p><strong>Raison :</strong>{selectedReport.reason}</p>
+              <p><strong>Date :</strong> {new Date(selectedReport.created_at).toLocaleString('fr-FR')}</p>
+            </div>
+
+            <div className="modal-section">
+              <h3>Utilisateur</h3>
+              <p><strong>Nom :</strong> {selectedReport.user?.firstname} {selectedReport.user?.lastname}</p>
+              <p><strong>Email :</strong> {selectedReport.user?.email}</p>
             </div>
 
             <button className="close-btn" onClick={handleCloseModal}>
