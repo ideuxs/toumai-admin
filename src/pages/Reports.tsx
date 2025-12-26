@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Eye, ArrowLeft } from 'lucide-react';
+import { AlertCircle, Eye, ArrowLeft, Trash2 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import './Reports.css';
@@ -25,7 +25,7 @@ const Reports: React.FC = () => {
 
   useEffect(() => {
     fetchReports();
-    
+
     // Détection du redimensionnement pour le responsive
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
@@ -76,6 +76,31 @@ const Reports: React.FC = () => {
     setIsModalOpen(false);
   };
 
+  const handleDeleteReport = async (reportId: number) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce signalement ? Cette action est irréversible.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('report_user')
+        .delete()
+        .eq('id', reportId);
+
+      if (error) {
+        console.error('Erreur lors de la suppression du signalement:', error);
+        alert('Erreur lors de la suppression du signalement');
+      } else {
+        alert('Signalement supprimé avec succès');
+        handleCloseModal();
+        fetchReports(); // Refresh the list
+      }
+    } catch (err) {
+      console.error('Erreur inattendue lors de la suppression:', err);
+      alert('Erreur inattendue lors de la suppression');
+    }
+  };
+
   // Affichage mobile en cartes
   const renderMobileCards = () => (
     <>
@@ -85,7 +110,7 @@ const Reports: React.FC = () => {
             <span className="reports-mobile-id">#{report.id}</span>
             <span className="reports-mobile-category">{report.category_report}</span>
           </div>
-          
+
           <div className="reports-mobile-info">
             <div className="reports-mobile-label">Utilisateur</div>
             <div className="reports-mobile-value">
@@ -206,7 +231,7 @@ const Reports: React.FC = () => {
                 <p><strong>Prix :</strong> {selectedReport.product?.price} €</p>
               )}
             </div>
-            
+
             <div className="modal-section">
               <h3>Signalement</h3>
               <p><strong>ID :</strong> #{selectedReport.id}</p>
@@ -221,9 +246,18 @@ const Reports: React.FC = () => {
               <p><strong>Email :</strong> {selectedReport.user?.email}</p>
             </div>
 
-            <button className="close-btn" onClick={handleCloseModal}>
-              Fermer
-            </button>
+            <div className="modal-actions">
+              <button className="close-btn" onClick={handleCloseModal}>
+                Fermer
+              </button>
+              <button
+                className="delete-report-btn"
+                onClick={() => handleDeleteReport(selectedReport.id)}
+              >
+                <Trash2 size={16} />
+                Supprimer le signalement
+              </button>
+            </div>
           </div>
         </div>
       )}
