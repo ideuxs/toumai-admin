@@ -62,7 +62,6 @@ const App: React.FC = () => {
     if (error) {
       console.error('Erreur lors du chargement:', error);
     } else {
-      console.log('Données chargées:', data);
       setAnnouncements(data || []);
     }
     setLoading(false);
@@ -187,7 +186,7 @@ const App: React.FC = () => {
     navigate('/reports');
   };
 
-   const goToNotifications = () => {
+  const goToNotifications = () => {
     navigate('/global-notifications');
   };
 
@@ -208,8 +207,128 @@ const App: React.FC = () => {
     setSelectedAnnouncement(null);
   };
 
-  const filteredAnnouncements = activeTab === 'all' 
-    ? announcements 
+  const handleDelete = async (id: number) => {
+    try {
+      // Récupération des informations du produit et de l'utilisateur avant suppression
+      const { data: product, error: fetchError } = await supabase
+        .from('product')
+        .select('owner_id, name')
+        .eq('id_product', id)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error('Erreur lors de la récupération du produit:', fetchError);
+      }
+
+      // Récupération du prénom de l'utilisateur
+      let userFirstname = '';
+      if (product?.owner_id) {
+        const { data: user, error: userError } = await supabase
+          .from('users')
+          .select('firstname')
+          .eq('id', product.owner_id)
+          .single();
+
+        if (userError) {
+          console.error('Erreur lors de la récupération de l\'utilisateur:', userError);
+        } else {
+          userFirstname = user?.firstname || '';
+        }
+      }
+
+      // Envoi de la notification avant suppression
+      if (product?.owner_id) {
+        try {
+          const { data: userTokens, error: tokenError } = await supabase
+            .from('users')
+            .select('token_apn')
+            .eq('id', product.owner_id)
+            .single();
+
+          if (tokenError) {
+            console.error('Erreur récupération token:', tokenError);
+          } else {
+            const deviceToken = userTokens?.token_apn;
+            if (deviceToken) {
+              const title = 'Naria';
+              const subtitle = 'Annonce supprimée';
+              const message = `Bonjour ${userFirstname}, ton annonce "${product.name}" a été supprimée par un administrateur.`;
+
+              await fetch('https://rywcekthoiykxecltmhq.supabase.co/functions/v1/send-apn-notifications', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+                },
+                body: JSON.stringify({
+                  deviceToken,
+                  title,
+                  subtitle,
+                  body: message,
+                }),
+              });
+              console.log('✅ Notification de suppression envoyée avec succès');
+            } else {
+              console.log(`⚠️ Aucun token APNs trouvé pour l'utilisateur`);
+            }
+          }
+        } catch (notifyError) {
+          console.error('Erreur lors de l\'envoi de la notification:', notifyError);
+        }
+      }
+
+      // 1. Lister tous les fichiers du dossier `products/product-{id}`
+      const { data: files, error: listError } = await supabase
+        .storage
+        .from('product-images')
+        .list(`products/product-${id}`);
+
+      if (listError) {
+        console.error('Erreur lors de la récupération des fichiers du storage:', listError);
+      } else if (files && files.length > 0) {
+        // Créer un tableau avec tous les chemins complets des fichiers
+        const filePaths = files.map(file => `products/product-${id}/${file.name}`);
+
+        // 2. Supprimer tous les fichiers
+        const { error: deleteError } = await supabase
+          .storage
+          .from('product-images')
+          .remove(filePaths);
+
+        if (deleteError) {
+          console.error('Erreur lors de la suppression des fichiers du storage:', deleteError);
+        }
+      }
+
+      const { error: imagesError } = await supabase
+        .from('product_images')
+        .delete()
+        .eq('product_id', id);
+
+      if (imagesError) {
+        console.error('Erreur lors de la suppression des liens d’images:', imagesError);
+      }
+
+      const { error: productError } = await supabase
+        .from('product')
+        .delete()
+        .eq('id_product', id);
+
+      if (productError) {
+        console.error('Erreur lors de la suppression:', productError);
+        alert('Erreur lors de la suppression de l\'annonce');
+      } else {
+        alert('Annonce supprimée avec succès');
+        fetchAnnounces(); // Refresh the list
+      }
+    } catch (err) {
+      console.error('Erreur inattendue lors de la suppression: ', err);
+      alert('Erreur inattendue lors de la suppression');
+    }
+  };
+
+  const filteredAnnouncements = activeTab === 'all'
+    ? announcements
     : announcements.filter(a => a.state === activeTab);
 
 
@@ -230,25 +349,14 @@ const App: React.FC = () => {
       <header className="header">
         <div className="container">
           <div className="header-content">
-            <h1 className="header-title">Toumai Market Admin</h1>
+            <h1 className="header-title">Naria Admin</h1>
             <p className="header-subtitle">Gérez vos annonces en toute simplicité</p>
           </div>
           <div className="header-actions">
             <button className="header-btn" onClick={goToReports}>
               📋 Voir les signalements
             </button>
-            <button
-              onClick={goToNotifications}
-              style={{
-                backgroundColor: '#28a745',
-                color: 'white',
-                padding: '10px 20px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                border: 'none',
-                fontSize: '16px',
-              }}
-            >
+            <button className="header-btn" onClick={goToNotifications}>
               Envoyer une notification
             </button>
             <button className="header-logout" onClick={handleLogout}>Déconnexion</button>
@@ -340,13 +448,13 @@ const App: React.FC = () => {
               <Package className="empty-icon" />
               <h3 className="empty-title">Aucune annonce</h3>
               <p className="empty-text">
-                {activeTab === 'pending' 
-                  ? "Il n'y a aucune annonce en attente de traitement." 
+                {activeTab === 'pending'
+                  ? "Il n'y a aucune annonce en attente de traitement."
                   : activeTab === 'approved'
-                  ? "Aucune annonce approuvée pour le moment."
-                  : activeTab === 'declined'
-                  ? "Aucune annonce refusée pour le moment."
-                  : "Aucune annonce n'a été créée pour le moment."}
+                    ? "Aucune annonce approuvée pour le moment."
+                    : activeTab === 'declined'
+                      ? "Aucune annonce refusée pour le moment."
+                      : "Aucune annonce n'a été créée pour le moment."}
               </p>
             </div>
           ) : (
@@ -370,6 +478,7 @@ const App: React.FC = () => {
         isOpen={isModalOpen}
         onClose={handleModalClose}
         onAction={handleAction}
+        onDelete={handleDelete}
       />
     </div>
   );

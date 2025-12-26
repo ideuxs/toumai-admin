@@ -58,9 +58,9 @@ const GlobalNotification: React.FC = () => {
 
   const handleInputChange =
     (setter: React.Dispatch<React.SetStateAction<string>>) =>
-    (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      setter(e.target.value);
-    };
+      (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        setter(e.target.value);
+      };
 
   const charCount = message.length;
   const titleCount = title.length;
@@ -193,7 +193,7 @@ const GlobalNotification: React.FC = () => {
             </button>
 
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/admin')}
               className="button button-secondary"
             >
               <svg className="button-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

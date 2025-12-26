@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, Package, User, Calendar } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Package, User, Calendar, Trash2 } from 'lucide-react';
 import { getImagesForProduct } from '../services/imageService';
 import { getNameOfUser } from '../services/authService';
 import type { Announcement } from '../types';
@@ -10,6 +10,7 @@ interface AnnouncementModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAction: (id: number, action: 'approved' | 'declined') => void;
+  onDelete: (id: number) => void;
 }
 
 const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
@@ -17,6 +18,7 @@ const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
   isOpen,
   onClose,
   onAction,
+  onDelete,
 }) => {
   const [images, setImages] = useState<string[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -96,6 +98,13 @@ const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
     }
   };
 
+  const handleDelete = () => {
+    if (announcement && window.confirm('Êtes-vous sûr de vouloir supprimer cette annonce ? Cette action est irréversible.')) {
+      onDelete(announcement.id_product);
+      onClose();
+    }
+  };
+
   // --------------------------
   // Close zoom with Escape + block scroll on zoom
   // --------------------------
@@ -134,7 +143,7 @@ const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="announcement-modal-content" onClick={(e) => e.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>
           <X size={20} />
         </button>
@@ -279,6 +288,13 @@ const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
             >
               <X size={20} />
               Refuser
+            </button>
+            <button
+              className="modal-btn modal-btn-delete"
+              onClick={handleDelete}
+            >
+              <Trash2 size={20} />
+              Supprimer l'annonce
             </button>
           </div>
         </div>

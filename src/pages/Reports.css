@@ -138,6 +138,7 @@
 }
 
 @media (min-width: 640px) {
+
   .loading-state,
   .empty-state {
     margin-top: 4rem;
@@ -147,6 +148,7 @@
 }
 
 @media (min-width: 768px) {
+
   .loading-state,
   .empty-state {
     margin-top: 5rem;
@@ -232,6 +234,7 @@
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -243,7 +246,7 @@
   .reports-table table {
     display: none;
   }
-  
+
   .reports-table {
     padding: 0;
   }
@@ -347,6 +350,7 @@
 }
 
 @media (min-width: 1024px) {
+
   .reports-table th,
   .reports-table td {
     padding: 1.1rem 1.4rem;
@@ -459,6 +463,7 @@
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -469,8 +474,7 @@
   padding: 1.5rem;
   border-radius: 16px;
   width: 100%;
-  max-width: 560px;
-  max-height: 90vh;
+  max-width: 700px;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   color: #222;
@@ -496,6 +500,7 @@
     opacity: 0;
     transform: translateY(40px) scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -645,6 +650,64 @@
   transform: translateY(0);
 }
 
+/* Modal Actions Container */
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .modal-actions {
+    flex-direction: row;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+}
+
+.modal-actions .close-btn,
+.modal-actions .delete-report-btn {
+  margin-top: 0;
+  flex: 1;
+}
+
+/* Delete Report Button */
+.delete-report-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  color: white;
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .delete-report-btn {
+    padding: 0.8rem 1.5rem;
+    font-size: 1rem;
+  }
+}
+
+.delete-report-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4);
+  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+}
+
+.delete-report-btn:active {
+  transform: translateY(0);
+}
+
 /* Scrollbar personnalisée pour la modal */
 .modal-content::-webkit-scrollbar {
   width: 6px;
@@ -672,10 +735,13 @@
 
 /* Animations */
 @keyframes pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 0.8;
     transform: scale(1);
   }
+
   50% {
     opacity: 1;
     transform: scale(1.05);
@@ -689,7 +755,8 @@
 /* Accessibilité - Focus visible */
 .back-btn:focus,
 .view-btn:focus,
-.close-btn:focus {
+.close-btn:focus,
+.delete-report-btn:focus {
   outline: 3px solid #667eea;
   outline-offset: 2px;
 }

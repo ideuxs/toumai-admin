@@ -18,13 +18,14 @@
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
 }
 
 /* Modal Content */
-.modal-content {
+.announcement-modal-content {
   background-color: white;
   border-radius: 1rem;
   max-width: 48rem;
@@ -41,6 +42,7 @@
     transform: translateY(20px);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;
@@ -85,7 +87,7 @@
 
 /* Modal Image */
 .modal-image {
-  height: 20rem;
+  height: 46rem;
   background: linear-gradient(135deg, #dbeafe 0%, #e9d5ff 100%);
   border-radius: 0.75rem;
   display: flex;
@@ -410,7 +412,7 @@
 
 @media (min-width: 640px) {
   .modal-actions {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
@@ -460,6 +462,17 @@
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
 }
 
+.modal-btn-delete {
+  background-color: #f97316;
+  color: white;
+}
+
+.modal-btn-delete:hover:not(:disabled) {
+  background-color: #ea580c;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
+}
+
 /* Responsive */
 @media (max-width: 639px) {
   .modal-price {
@@ -488,19 +501,19 @@
 }
 
 /* Scrollbar personnalisée */
-.modal-content::-webkit-scrollbar {
+.announcement-modal-content::-webkit-scrollbar {
   width: 8px;
 }
 
-.modal-content::-webkit-scrollbar-track {
+.announcement-modal-content::-webkit-scrollbar-track {
   background: #f1f1f1;
 }
 
-.modal-content::-webkit-scrollbar-thumb {
+.announcement-modal-content::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 4px;
 }
 
-.modal-content::-webkit-scrollbar-thumb:hover {
+.announcement-modal-content::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
