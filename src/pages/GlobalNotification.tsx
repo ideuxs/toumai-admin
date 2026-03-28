@@ -1,5 +1,4 @@
 import React, { useState, type ChangeEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
 import './GlobalNotification.css';
 
 const GlobalNotification: React.FC = () => {
@@ -9,7 +8,6 @@ const GlobalNotification: React.FC = () => {
   const [isSending, setIsSending] = useState(false);
   const [responseMsg, setResponseMsg] = useState('');
   const [responseType, setResponseType] = useState<'success' | 'error' | ''>('');
-  const navigate = useNavigate();
 
   const sendGlobalNotification = async () => {
     if (!title.trim() || !message.trim()) {
@@ -66,161 +64,102 @@ const GlobalNotification: React.FC = () => {
   const titleCount = title.length;
 
   return (
-    <div className="notification-container">
-      <div className="background-effects">
-        <div className="blob blob-1"></div>
-        <div className="blob blob-2"></div>
-      </div>
-
-      <div className="content-wrapper">
-        <header className="header">
-          <div className="icon-container">
-            <svg className="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-              />
-            </svg>
-          </div>
-          <h1 className="title">Notifications Globales</h1>
-          <p className="subtitle">
-            <svg className="sparkle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-              />
-            </svg>
-            Envoyez des messages à tous vos utilisateurs
+    <div className="content-container">
+      <div className="notification-gn-form-container">
+        
+        <div className="notification-header">
+          <h3>Envoyer une notification globale</h3>
+          <p>
+            Ce message sera envoyé immédiatement à tous les utilisateurs enregistrés avec notifications activées.
           </p>
-        </header>
+        </div>
 
-        <div className="card">
-          <div className="card-content">
-            <div className="form-group">
-              <label className="label">
-                Titre <span className="required">*</span>
-              </label>
-              <input
-                type="text"
-                value={title}
-                onChange={handleInputChange(setTitle)}
-                maxLength={100}
-                className="input"
-                placeholder="Naria - Nouvelle mise à jour !"
-              />
-              <div className="char-counter">{titleCount}/100</div>
+        <div className="notification-gn-form-body">
+          <div className="gn-form-group">
+            <label className="gn-form-label">
+              Titre <span className="required-star">*</span>
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={handleInputChange(setTitle)}
+              maxLength={100}
+              className="gn-form-input"
+              placeholder="Naria - Nouvelle mise à jour !"
+            />
+            <div className="char-counter-row">
+              <span className="char-counter-hint">100 caractères max</span>
+              <span className="char-count">{titleCount}/100</span>
             </div>
+          </div>
 
-            <div className="form-group">
-              <label className="label">
-                Sous-titre <span className="optional">(optionnel)</span>
-              </label>
-              <input
-                type="text"
-                value={subtitle}
-                onChange={handleInputChange(setSubtitle)}
-                maxLength={100}
-                className="input"
-                placeholder="Découvre les nouveautés 🔥"
-              />
+          <div className="gn-form-group">
+            <label className="gn-form-label">
+              Sous-titre <span className="optional-text">(optionnel)</span>
+            </label>
+            <input
+              type="text"
+              value={subtitle}
+              onChange={handleInputChange(setSubtitle)}
+              maxLength={100}
+              className="gn-form-input"
+              placeholder="Découvre les nouveautés 🔥"
+            />
+          </div>
+
+          <div className="gn-form-group">
+            <label className="gn-form-label">
+              Message <span className="required-star">*</span>
+            </label>
+            <textarea
+              value={message}
+              onChange={handleInputChange(setMessage)}
+              rows={5}
+              maxLength={500}
+              className="gn-form-input gn-form-textarea"
+              placeholder="L'application Naria a été mise à jour avec de nouvelles fonctionnalités..."
+            />
+            <div className="char-counter-row">
+              <span className="char-counter-hint">Soyez concis et engageant</span>
+              <span className={`char-count ${charCount > 450 ? 'warning' : ''}`}>
+                {charCount}/500
+              </span>
             </div>
+          </div>
 
-            <div className="form-group">
-              <label className="label">
-                Message <span className="required">*</span>
-              </label>
-              <textarea
-                value={message}
-                onChange={handleInputChange(setMessage)}
-                rows={5}
-                maxLength={500}
-                className="input textarea"
-                placeholder="L'application Naria a été mise à jour avec de nouvelles fonctionnalités..."
-              />
-              <div className="char-counter-row">
-                <span className="hint">Soyez concis et engageant</span>
-                <span className={`char-counter ${charCount > 450 ? 'warning' : ''}`}>
-                  {charCount}/500
-                </span>
+          {(title || subtitle || message) && (
+            <div className="preview-box">
+              <p className="preview-title-bar">Aperçu de la notification APNs</p>
+              <div className="preview-content-card">
+                 {title && <p className="preview-title-text">{title}</p>}
+                 {subtitle && <p className="preview-subtitle-text">{subtitle}</p>}
+                 {message && <p className="preview-body-text">{message}</p>}
               </div>
             </div>
+          )}
 
-            {(title || subtitle || message) && (
-              <div className="preview">
-                <div className="preview-content">
-                  <div className="preview-icon">
-                    <svg className="preview-icon-svg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                      />
-                    </svg>
-                  </div>
-                  <div className="preview-text">
-                    <p className="preview-label">APERÇU</p>
-                    {title && <p className="preview-title">{title}</p>}
-                    {subtitle && <p className="preview-subtitle">{subtitle}</p>}
-                    {message && <p className="preview-message">{message}</p>}
-                  </div>
-                </div>
+          <div className="gn-form-actions">
+            {responseMsg && (
+              <div className={`alert-message ${responseType === 'success' ? 'alert-success' : 'alert-error'}`}>
+                {responseMsg}
               </div>
             )}
 
             <button
               onClick={sendGlobalNotification}
               disabled={isSending || !title.trim() || !message.trim()}
-              className={`button ${isSending || !title.trim() || !message.trim() ? 'button-disabled' : ''}`}
+              className="btn-submit"
             >
               {isSending ? (
                 <>
-                  <div className="spinner"></div>
+                  <div className="spinner-icon"></div>
                   <span>Envoi en cours...</span>
                 </>
               ) : (
-                <>
-                  <svg className="button-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                  <span>Envoyer la notification</span>
-                </>
+                <span>Envoyer la notification globale</span>
               )}
             </button>
-
-            <button
-              onClick={() => navigate('/admin')}
-              className="button button-secondary"
-            >
-              <svg className="button-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              Retour à l’accueil
-            </button>
-
-            {responseMsg && (
-              <div className={`alert ${responseType === 'success' ? 'alert-success' : 'alert-error'}`}>
-                <svg className="alert-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {responseType === 'success' ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  ) : (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  )}
-                </svg>
-                <p className="alert-text">{responseMsg}</p>
-              </div>
-            )}
           </div>
-
-          <footer className="footer">
-            <p className="footer-text">
-              💡 Astuce : Les notifications sont envoyées immédiatement à tous les utilisateurs actifs
-            </p>
-          </footer>
         </div>
       </div>
     </div>

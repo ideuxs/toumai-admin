@@ -9,19 +9,34 @@ const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const navigate = useNavigate();
+
+  // Redirect to /admin if already authenticated
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        navigate('/admin', { replace: true });
+      } else {
+        setCheckingSession(false);
+      }
+    });
+  }, [navigate]);
 
   useEffect(() => {
     // Create floating shapes
     const shapesContainer = document.querySelector('.shapes-container');
     if (shapesContainer) {
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 12; i++) {
         const shape = document.createElement('div');
-        shape.className = 'floating-shape';
+        const size = Math.random() * 150 + 50;
+        shape.className = `floating-shape shape-${i % 3}`;
+        shape.style.width = size + 'px';
+        shape.style.height = size + 'px';
         shape.style.left = Math.random() * 100 + '%';
         shape.style.top = Math.random() * 100 + '%';
-        shape.style.animationDelay = Math.random() * 10 + 's';
-        shape.style.animationDuration = (Math.random() * 15 + 15) + 's';
+        shape.style.animationDelay = Math.random() * 5 + 's';
+        shape.style.animationDuration = (Math.random() * 20 + 20) + 's';
         shapesContainer.appendChild(shape);
       }
     }
@@ -33,13 +48,24 @@ const Login: React.FC = () => {
     };
   }, []);
 
+  if (checkingSession) {
+    return (
+      <div className="loading-container">
+        <div className="loading-content">
+          <div className="spinner"></div>
+          <p className="loading-text">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    
+
     if (error) {
       setError("Identifiants incorrects ou problème réseau.");
       setLoading(false);
@@ -51,17 +77,17 @@ const Login: React.FC = () => {
   return (
     <div className="login-container">
       <div className="shapes-container"></div>
-      
+
       <div className="login-card">
         <div className="brand-section">
           <div className="brand-icon">
             <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="50" cy="50" r="45" className="brand-circle"/>
-              <path d="M30 50 L45 35 L60 50 L75 30" className="brand-path" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="50" cy="50" r="45" className="brand-circle" />
+              <path d="M30 50 L45 35 L60 50 L75 30" className="brand-path" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <h1 className="brand-title">Toumai</h1>
-          <p className="brand-subtitle">Administration</p>
+          <h1 className="brand-title">Naria Admin</h1>
+          <p className="brand-subtitle">Console de Gestion</p>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
@@ -122,7 +148,7 @@ const Login: React.FC = () => {
         </form>
       </div>
 
-      <div className="footer-text">© 2024 Toumai Admin</div>
+      <div className="footer-text">© 2025 Naria Admin Dashboard</div>
     </div>
   );
 };

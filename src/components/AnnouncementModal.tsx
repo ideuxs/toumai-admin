@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, Package, User, Calendar, Trash2 } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Package, Trash2, Heart, ShieldAlert, Phone, Mail } from 'lucide-react';
+import { supabase } from '../services/supabaseClient';
 import { getImagesForProduct } from '../services/imageService';
-import { getNameOfUser } from '../services/authService';
 import type { Announcement } from '../types';
 import './AnnouncementModal.css';
 
@@ -13,6 +13,14 @@ interface AnnouncementModalProps {
   onDelete: (id: number) => void;
 }
 
+interface SellerInfo {
+  firstname: string;
+  lastname: string;
+  email: string;
+  phone: string | null;
+  created_at: string;
+}
+
 const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
   announcement,
   isOpen,
@@ -22,43 +30,69 @@ const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
 }) => {
   const [images, setImages] = useState<string[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loadingMedia, setLoadingMedia] = useState(false);
 
-  const [nameOfUser, setNameOfUser] = useState<string | null>(null);
+  // Extra Data
+  const [seller, setSeller] = useState<SellerInfo | null>(null);
+  const [favCount, setFavCount] = useState(0);
+  const [reportCount, setReportCount] = useState(0);
+  const [loadingData, setLoadingData] = useState(false);
+
   const [isImageZoomed, setIsImageZoomed] = useState(false);
 
-  // --------------------------
-  // Load images & user name
-  // --------------------------
   useEffect(() => {
     if (announcement && isOpen) {
       loadImages();
-      loadNameOfUser();
+      loadExtraData();
     } else {
-      // reset when modal closed
       setImages([]);
       setCurrentImageIndex(0);
-      setNameOfUser(null);
-      setLoading(false);
+      setSeller(null);
+      setFavCount(0);
+      setReportCount(0);
       setIsImageZoomed(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [announcement, isOpen]);
 
-  const loadNameOfUser = async () => {
-    if (!announcement?.owner_id) return;
+  const loadExtraData = async () => {
+    if (!announcement) return;
+    setLoadingData(true);
     try {
-      const name = await getNameOfUser(announcement.owner_id);
-      setNameOfUser(name ?? null);
+      // 1. Fetch Seller
+      if (announcement.owner_id) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('firstname, lastname, email, phone, created_at')
+          .eq('id', announcement.owner_id)
+          .single();
+        if (userData) setSeller(userData as SellerInfo);
+      }
+
+      // 2. Fetch Favourites Count
+      const { count: fCount } = await supabase
+        .from('favourite_product')
+        .select('*', { count: 'exact', head: true })
+        .eq('id_product', announcement.id_product);
+      setFavCount(fCount || 0);
+
+      // 3. Fetch Reports Count
+      const { count: rCount } = await supabase
+        .from('report_user')
+        .select('*', { count: 'exact', head: true })
+        .eq('id_product', announcement.id_product);
+      setReportCount(rCount || 0);
+
     } catch (err) {
-      console.error('Erreur getNameOfUser:', err);
-      setNameOfUser(null);
+      console.error('Error fetching extra data:', err);
+    } finally {
+      setLoadingData(false);
     }
   };
 
   const loadImages = async () => {
     if (!announcement) return;
-    setLoading(true);
+    setLoadingMedia(true);
     try {
       const productImages = await getImagesForProduct(announcement.id_product);
       setImages(Array.isArray(productImages) ? productImages : []);
@@ -67,30 +101,18 @@ const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
       console.error('Erreur lors du chargement des images:', error);
       setImages([]);
     } finally {
-      setLoading(false);
+      setLoadingMedia(false);
     }
   };
 
-  // --------------------------
-  // Navigation safe (évite modulo 0)
-  // --------------------------
   const nextImage = useCallback(() => {
-    setCurrentImageIndex((prev) => {
-      if (!images.length) return 0;
-      return (prev + 1) % images.length;
-    });
+    setCurrentImageIndex((prev) => (!images.length ? 0 : (prev + 1) % images.length));
   }, [images.length]);
 
   const prevImage = useCallback(() => {
-    setCurrentImageIndex((prev) => {
-      if (!images.length) return 0;
-      return (prev - 1 + images.length) % images.length;
-    });
+    setCurrentImageIndex((prev) => (!images.length ? 0 : (prev - 1 + images.length) % images.length));
   }, [images.length]);
 
-  // --------------------------
-  // Actions
-  // --------------------------
   const handleAction = (action: 'approved' | 'declined') => {
     if (announcement) {
       onAction(announcement.id_product, action);
@@ -105,37 +127,26 @@ const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
     }
   };
 
-  // --------------------------
-  // Close zoom with Escape + block scroll on zoom
-  // --------------------------
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isImageZoomed) {
-        setIsImageZoomed(false);
+      if (e.key === 'Escape') {
+        if (isImageZoomed) setIsImageZoomed(false);
+        else onClose();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isImageZoomed]);
+  }, [isImageZoomed, onClose]);
 
   useEffect(() => {
-    document.body.style.overflow = isImageZoomed ? 'hidden' : 'auto';
-    return () => {
-      document.body.style.overflow = 'auto';
-    };
-  }, [isImageZoomed]);
+    document.body.style.overflow = (isOpen || isImageZoomed) ? 'hidden' : 'auto';
+    return () => { document.body.style.overflow = 'auto'; };
+  }, [isOpen, isImageZoomed]);
 
-  // --------------------------
-  // Helpers
-  // --------------------------
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return 'Date inconnue';
+    return new Date(dateString).toLocaleDateString('fr-FR', {
+      year: 'numeric', month: 'long', day: 'numeric'
     });
   };
 
@@ -143,177 +154,160 @@ const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="announcement-modal-content" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose}>
+      <div className="modern-modal-content" onClick={(e) => e.stopPropagation()}>
+        <button className="modern-modal-close" onClick={onClose}>
           <X size={20} />
         </button>
 
-        <div className="modal-header">
-          {/* Image principale - conteneur NE gère PAS l'ouverture du zoom */}
-          <div className="modal-image" onClick={(e) => e.stopPropagation()}>
-            {loading ? (
-              <div className="modal-image-loading">
-                <div className="spinner" />
-                <p>Chargement des images...</p>
-              </div>
-            ) : images.length > 0 ? (
-              <>
-                {/* Image (SEULE la balise <img> ouvre le zoom au clic) */}
-                <img
-                  src={images[currentImageIndex]}
-                  alt={`Produit ${announcement.id_product}`}
-                  className="modal-image-img"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsImageZoomed(true);
-                  }}
-                />
+        <div className="modern-modal-split">
 
-                {images.length > 1 && (
-                  <>
-                    <button
-                      className="modal-nav modal-nav-left"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        prevImage();
-                      }}
-                    >
-                      <ChevronLeft size={24} />
-                    </button>
+          {/* L E F T   S I D E :   G A L L E R Y */}
+          <div className="modern-gallery-section">
+            <div className="gallery-main-view" onClick={() => images.length > 0 && setIsImageZoomed(true)}>
+              {loadingMedia ? (
+                <div className="gallery-placeholder">
+                  <div className="spinner" />
+                </div>
+              ) : images.length > 0 ? (
+                <>
+                  <img src={images[currentImageIndex]} alt="Produit" className="gallery-main-img" />
+                  {images.length > 1 && (
+                    <>
+                      <button className="gallery-nav left" onClick={(e) => { e.stopPropagation(); prevImage(); }}>
+                        <ChevronLeft size={20} />
+                      </button>
+                      <button className="gallery-nav right" onClick={(e) => { e.stopPropagation(); nextImage(); }}>
+                        <ChevronRight size={20} />
+                      </button>
+                      <div className="gallery-counter">{currentImageIndex + 1} / {images.length}</div>
+                    </>
+                  )}
+                </>
+              ) : (
+                <div className="gallery-placeholder">
+                  <Package size={48} />
+                  <p>Aucune image</p>
+                </div>
+              )}
+            </div>
 
-                    <button
-                      className="modal-nav modal-nav-right"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        nextImage();
-                      }}
-                    >
-                      <ChevronRight size={24} />
-                    </button>
-
-                    <div className="modal-image-counter">
-                      {currentImageIndex + 1} / {images.length}
-                    </div>
-                  </>
-                )}
-              </>
-            ) : (
-              <div className="modal-image-placeholder">
-                <Package size={64} />
-                <p>Aucune image disponible</p>
+            {images.length > 1 && (
+              <div className="gallery-thumbnails">
+                {images.map((img, idx) => (
+                  <div
+                    key={idx}
+                    className={`thumbnail-item ${idx === currentImageIndex ? 'active' : ''}`}
+                    onClick={() => setCurrentImageIndex(idx)}
+                  >
+                    <img src={img} alt={`Thumb ${idx}`} />
+                  </div>
+                ))}
               </div>
             )}
           </div>
 
-          {/* Titre et statut */}
-          <div className="modal-title-section">
-            <h2 className="modal-title">{announcement.titre || announcement.name}</h2>
-            <div className={`modal-status status-${announcement.state || announcement.etat}`}>
-              {(announcement.state || announcement.etat) === 'approved' && 'Approuvé'}
-              {(announcement.state || announcement.etat) === 'declined' && 'Refusé'}
-              {(announcement.state || announcement.etat) === 'pending' && 'En attente'}
-            </div>
-          </div>
-        </div>
+          {/* R I G H T   S I D E :   D E T A I L S */}
+          <div className="modern-details-section">
 
-        <div className="modal-body">
-          {/* Prix et ID */}
-          <div className="modal-price-section">
-            <div className="modal-price">{announcement.prix || announcement.price} FCFA</div>
-            <div className="modal-id">ID: {announcement.id_product}</div>
-          </div>
+            <div className="details-scroll-area">
+              <div className="details-header">
+                <div className="header-tags">
+                  <span className="modern-badge category">{announcement.category}</span>
+                  <span className={`modern-badge status-${announcement.state || announcement.etat}`}>
+                    {announcement.state === 'approved' ? 'Approuvée' : announcement.state === 'declined' ? 'Refusée' : 'En attente'}
+                  </span>
+                </div>
+                <h1 className="modern-title">{announcement.titre || announcement.name}</h1>
+                <div className="modern-price">{announcement.prix || announcement.price} FCFA</div>
+                <div className="modern-date">Publié le {formatDate(announcement.created_at)} • ID: {announcement.id_product}</div>
+              </div>
 
-          {/* Informations du produit */}
-          <div className="modal-info-grid">
-            <div className="modal-info-item">
-              <Package className="modal-info-icon" />
-              <div>
-                <div className="modal-info-label">Catégorie</div>
-                <div className="modal-info-value">{announcement.category}</div>
-              </div>
-            </div>
-            <div className="modal-info-item">
-              <User className="modal-info-icon" />
-              <div>
-                <div className="modal-info-label">Vendeur</div>
-                <div className="modal-info-value">{nameOfUser || 'Non spécifié'}</div>
-              </div>
-            </div>
-            <div className="modal-info-item">
-              <Calendar className="modal-info-icon" />
-              <div>
-                <div className="modal-info-label">Date de publication</div>
-                <div className="modal-info-value">
-                  {announcement.created_at ? formatDate(announcement.created_at) : 'Non spécifiée'}
+              <div className="modern-stats-grid">
+                <div className="stat-box">
+                  <Heart size={18} className="stat-icon heart" />
+                  <div className="stat-info">
+                    <span className="stat-val">{favCount}</span>
+                    <span className="stat-lbl">Favoris</span>
+                  </div>
+                </div>
+                <div className="stat-box">
+                  <ShieldAlert size={18} className={`stat-icon ${reportCount > 0 ? 'danger' : 'safe'}`} />
+                  <div className="stat-info">
+                    <span className="stat-val">{reportCount}</span>
+                    <span className="stat-lbl">Signalements</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Description */}
-          <div className="modal-description-section">
-            <h3 className="modal-section-title">Description</h3>
-            <p className="modal-description">{announcement.description}</p>
-          </div>
+              <div className="modern-seller-card">
+                <h3 className="section-title">Informations Vendeur</h3>
+                {loadingData ? (
+                  <div className="seller-loading">Chargement du profil...</div>
+                ) : seller ? (
+                  <div className="seller-profile">
+                    <div className="seller-avatar">
+                      {seller.firstname.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="seller-info-list">
+                      <div className="seller-name">{seller.firstname} {seller.lastname}</div>
+                      <div className="seller-contact">
+                        <Mail size={12} /> {seller.email}
+                      </div>
+                      {seller.phone && (
+                        <div className="seller-contact">
+                          <Phone size={12} /> {seller.phone}
+                        </div>
+                      )}
+                      <div className="seller-joined">
+                        Membre depuis {formatDate(seller.created_at)}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="seller-not-found">Vendeur introuvable ou supprimé.</div>
+                )}
+              </div>
 
-          {/* Miniatures */}
-          {images.length > 1 && (
-            <div className="modal-images-grid">
-              {images.map((image, index) => (
-                <div
-                  key={index}
-                  className={`modal-thumbnail ${index === currentImageIndex ? 'active' : ''}`}
-                  onClick={() => setCurrentImageIndex(index)}
+              <div className="modern-description">
+                <h3 className="section-title">Description</h3>
+                <p className="description-text">{announcement.description}</p>
+              </div>
+            </div>{/* end details-scroll-area */}
+
+            <div className="modern-actions">
+              <button
+                className="btn-modern btn-danger-outline"
+                onClick={handleDelete}
+              >
+                <Trash2 size={16} /> Supprimer
+              </button>
+
+              <div className="action-group">
+                <button
+                  className="btn-modern btn-decline"
+                  onClick={() => handleAction('declined')}
+                  disabled={(announcement.state || announcement.etat) === 'declined'}
                 >
-                  <img src={image} alt={`Miniature ${index + 1}`} />
-                </div>
-              ))}
+                  <X size={16} /> Refuser
+                </button>
+                <button
+                  className="btn-modern btn-approve"
+                  onClick={() => handleAction('approved')}
+                  disabled={(announcement.state || announcement.etat) === 'approved'}
+                >
+                  <Package size={16} /> Approuver
+                </button>
+              </div>
             </div>
-          )}
 
-          {/* Actions */}
-          <div className="modal-actions">
-            <button
-              className="modal-btn modal-btn-approve"
-              onClick={() => handleAction('approved')}
-              disabled={(announcement.state || announcement.etat) === 'approved'}
-            >
-              <Package size={20} />
-              Approuver
-            </button>
-            <button
-              className="modal-btn modal-btn-decline"
-              onClick={() => handleAction('declined')}
-              disabled={(announcement.state || announcement.etat) === 'declined'}
-            >
-              <X size={20} />
-              Refuser
-            </button>
-            <button
-              className="modal-btn modal-btn-delete"
-              onClick={handleDelete}
-            >
-              <Trash2 size={20} />
-              Supprimer l'annonce
-            </button>
           </div>
         </div>
 
-        {/* Zoom overlay — placé à la fin pour être rendu au-dessus */}
+        {/* Zoom Overlay */}
         {isImageZoomed && images[currentImageIndex] && (
-          <div
-            className="modal-image-zoomed"
-            onClick={() => setIsImageZoomed(false)} // clic sur l'overlay ferme
-            role="dialog"
-            aria-modal="true"
-          >
-            <img
-              src={images[currentImageIndex]}
-              alt={`Produit ${announcement.id_product} - zoom`}
-              className="modal-image-img"
-              onClick={(e) => e.stopPropagation()} // clic sur l'image ne ferme pas
-            />
-            <div className="modal-zoom-hint">Cliquez en dehors ou ESC pour fermer</div>
+          <div className="zoom-overlay" onClick={() => setIsImageZoomed(false)}>
+            <img src={images[currentImageIndex]} alt="Zoom" className="zoom-image" onClick={(e) => e.stopPropagation()} />
+            <div className="zoom-hint">Cliquez ailleurs pour fermer</div>
           </div>
         )}
       </div>
