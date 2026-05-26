@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, Eye, Trash2, X, AlertTriangle, User, Package, Calendar } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
+import { recordAdminAction } from '../services/authService';
 import './Reports.css';
 
 interface Report {
@@ -11,13 +12,13 @@ interface Report {
   category_report: string;
   created_at: string;
   user?: { firstname: string; lastname: string; email: string };
-  product?: { name: string; description: string; category: string; price: number };
+  product?: { name?: string; description?: string; category?: string; price?: number };
 }
 
 const Reports: React.FC = () => {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedReport, setSelectedReport] = useState<any>(null);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
@@ -51,11 +52,11 @@ const Reports: React.FC = () => {
     if (error) {
       console.error('Erreur lors du chargement des signalements:', error);
     } else {
-      const formatted = (data || []).map((item: any) => ({
+      const formatted = (data || []).map((item) => ({
         ...item,
         user: item.user,
         product: item.product
-      }));
+      })) as Report[];
       setReports(formatted);
     }
 
@@ -87,6 +88,17 @@ const Reports: React.FC = () => {
         console.error('Erreur lors de la suppression du signalement:', error);
         alert('Erreur lors de la suppression du signalement');
       } else {
+        await recordAdminAction({
+          action: 'report_deleted',
+          targetType: 'report_user',
+          targetId: reportId,
+          metadata: {
+            product_id: selectedReport?.id_product,
+            reporter_id: selectedReport?.id_user,
+            category_report: selectedReport?.category_report,
+          },
+        });
+
         alert('Signalement supprimé avec succès');
         handleCloseModal();
         fetchReports();
@@ -312,7 +324,7 @@ const Reports: React.FC = () => {
                     <AlertTriangle size={18} /> Contacter
                   </button>
                   <button className="btn-ultra-danger-full" onClick={() => handleDeleteReport(selectedReport.id)}>
-                    <Trash2 size={18} /> Supprimer l'annonce
+                    <Trash2 size={18} /> Supprimer le signalement
                   </button>
                 </div>
               </div>

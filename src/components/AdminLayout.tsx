@@ -1,16 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, List, Bell, AlertTriangle, LogOut, Menu, X, BarChart2 } from 'lucide-react';
+import { LayoutDashboard, List, Bell, AlertTriangle, LogOut, Menu, X, BarChart2, Users } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
+import { getCurrentAdminProfile, type AdminProfile } from '../services/authService';
 import '../App.css'; // Global UI variables
 
 const AdminLayout: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Listen for real-time auth changes (e.g., logout from another tab, session revoked)
   useEffect(() => {
+    getCurrentAdminProfile().then((profile) => {
+      if (!profile) {
+        navigate('/', { replace: true });
+        return;
+      }
+
+      setAdminProfile(profile);
+    });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         navigate('/', { replace: true });
@@ -71,6 +81,13 @@ const AdminLayout: React.FC = () => {
             <span>Signalements</span>
           </button>
           <button
+            className={`nav-item ${isActive('/users') ? 'active' : ''}`}
+            onClick={() => { navigate('/users'); setIsSidebarOpen(false); }}
+          >
+            <Users className="nav-icon" />
+            <span>Utilisateurs</span>
+          </button>
+          <button
             className={`nav-item ${isActive('/analytics') ? 'active' : ''}`}
             onClick={() => { navigate('/analytics'); setIsSidebarOpen(false); }}
           >
@@ -106,14 +123,19 @@ const AdminLayout: React.FC = () => {
               {isActive('/admin', true) ? "Vue d'ensemble" :
                 isActive('/admin/all') ? "Toutes les annonces" :
                   isActive('/reports') ? "Signalements" :
-                    isActive('/analytics') ? "Statistiques" :
-                      "Notifications Globales"}
+                    isActive('/users') ? "Utilisateurs" :
+                      isActive('/analytics') ? "Statistiques" :
+                        "Notifications Globales"}
             </h2>
           </div>
           <div className="top-header-right">
             <div className="admin-profile">
-              <div className="admin-avatar">A</div>
-              <span className="admin-name">Administrateur</span>
+              <div className="admin-avatar">
+                {(adminProfile?.firstname || 'A').charAt(0).toUpperCase()}
+              </div>
+              <span className="admin-name">
+                {adminProfile ? `${adminProfile.firstname} ${adminProfile.lastname}`.trim() : 'Administrateur'}
+              </span>
             </div>
           </div>
         </header>
