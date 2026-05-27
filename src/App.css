@@ -356,6 +356,10 @@ html, body, .main-content, .sidebar-nav {
   overflow: hidden;
 }
 
+.moderation-activity-section {
+  margin-top: 1.5rem;
+}
+
 .section-header {
   padding: 1.5rem;
   display: flex;
@@ -524,6 +528,82 @@ html, body, .main-content, .sidebar-nav {
 .btn-decline:hover {
   background: #fee2e2;
   color: #b91c1c;
+}
+
+.moderation-feed {
+  display: flex;
+  flex-direction: column;
+}
+
+.moderation-feed-row {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.moderation-feed-row:last-child {
+  border-bottom: none;
+}
+
+.moderation-action-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 0.4rem;
+  background: #94a3b8;
+}
+
+.moderation-action-dot.action-approved {
+  background: #16a34a;
+}
+
+.moderation-action-dot.action-declined {
+  background: #e11d48;
+}
+
+.moderation-feed-main {
+  min-width: 0;
+}
+
+.moderation-feed-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--navy-main);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.moderation-feed-date {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.moderation-feed-meta {
+  color: #475569;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+.moderation-feed-reason {
+  color: #64748b;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
+  padding: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.compact-empty {
+  padding: 2rem;
 }
 
 /* ==========================================================================

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, Package, Trash2, Heart, ShieldAlert, Phone, Mail } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Package, Trash2, Heart, ShieldAlert, Phone, Mail, History } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { getImagesForProduct } from '../services/imageService';
 import type { Announcement } from '../types';
@@ -21,6 +21,22 @@ interface SellerInfo {
   created_at: string;
 }
 
+interface ModerationEvent {
+  id: number;
+  action: string;
+  previous_state: string | null;
+  new_state: string | null;
+  reason: string | null;
+  created_at: string;
+  admin?: { firstname: string | null; lastname: string | null; email: string | null } | null;
+}
+
+type ModerationRelation<T> = T | T[] | null;
+
+interface SupabaseModerationEvent extends Omit<ModerationEvent, 'admin'> {
+  admin?: ModerationRelation<{ firstname: string | null; lastname: string | null; email: string | null }>;
+}
+
 const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
   announcement,
   isOpen,
@@ -36,6 +52,7 @@ const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
   const [seller, setSeller] = useState<SellerInfo | null>(null);
   const [favCount, setFavCount] = useState(0);
   const [reportCount, setReportCount] = useState(0);
+  const [moderationEvents, setModerationEvents] = useState<ModerationEvent[]>([]);
   const [loadingData, setLoadingData] = useState(false);
 
   const [isImageZoomed, setIsImageZoomed] = useState(false);
@@ -50,6 +67,7 @@ const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
       setSeller(null);
       setFavCount(0);
       setReportCount(0);
+      setModerationEvents([]);
       setIsImageZoomed(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -82,6 +100,28 @@ const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
         .select('*', { count: 'exact', head: true })
         .eq('id_product', announcement.id_product);
       setReportCount(rCount || 0);
+
+      const { data: moderationData } = await supabase
+        .from('product_moderation_events')
+        .select(`
+          id,
+          action,
+          previous_state,
+          new_state,
+          reason,
+          created_at,
+          admin:admin_id (firstname, lastname, email)
+        `)
+        .eq('product_id', announcement.id_product)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      const normalized = ((moderationData || []) as unknown as SupabaseModerationEvent[]).map((event) => ({
+        ...event,
+        admin: Array.isArray(event.admin) ? event.admin[0] ?? null : event.admin ?? null,
+      }));
+
+      setModerationEvents(normalized);
 
     } catch (err) {
       console.error('Error fetching extra data:', err);
@@ -148,6 +188,27 @@ const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
     return new Date(dateString).toLocaleDateString('fr-FR', {
       year: 'numeric', month: 'long', day: 'numeric'
     });
+  };
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const getActionLabel = (action: string) => {
+    const labels: Record<string, string> = {
+      approved: 'Approuvée',
+      declined: 'Refusée',
+      restored: 'Restaurée',
+      updated_by_admin: 'Modifiée',
+    };
+
+    return labels[action] || action;
   };
 
   if (!isOpen || !announcement) return null;
@@ -271,6 +332,36 @@ const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
               <div className="modern-description">
                 <h3 className="section-title">Description</h3>
                 <p className="description-text">{announcement.description}</p>
+              </div>
+
+              <div className="moderation-history-card">
+                <h3 className="section-title">
+                  <History size={14} /> Historique de modération
+                </h3>
+
+                {moderationEvents.length === 0 ? (
+                  <div className="moderation-history-empty">Aucune action enregistrée.</div>
+                ) : (
+                  <div className="moderation-history-list">
+                    {moderationEvents.map((event) => {
+                      const adminName = `${event.admin?.firstname || ''} ${event.admin?.lastname || ''}`.trim() || event.admin?.email || 'Admin';
+
+                      return (
+                        <div key={event.id} className="moderation-history-item">
+                          <div className={`history-dot action-${event.action}`} />
+                          <div className="history-content">
+                            <div className="history-title-row">
+                              <span className="history-title">{getActionLabel(event.action)}</span>
+                              <span className="history-date">{formatDateTime(event.created_at)}</span>
+                            </div>
+                            <div className="history-meta">{adminName}</div>
+                            {event.reason && <div className="history-reason">{event.reason}</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>{/* end details-scroll-area */}
 

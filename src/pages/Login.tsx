@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { useNavigate } from 'react-router-dom';
+import { getCurrentAdminProfile, touchAdminLogin } from '../services/authService';
 import './Login.css';
 
 const Login: React.FC = () => {
@@ -12,15 +13,33 @@ const Login: React.FC = () => {
   const [checkingSession, setCheckingSession] = useState(true);
   const navigate = useNavigate();
 
-  // Redirect to /admin if already authenticated
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let mounted = true;
+
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!mounted) return;
+
       if (session) {
-        navigate('/admin', { replace: true });
+        const admin = await getCurrentAdminProfile();
+        if (admin) {
+          navigate('/admin', { replace: true });
+          return;
+        }
+
+        await supabase.auth.signOut();
+        setCheckingSession(false);
       } else {
         setCheckingSession(false);
       }
-    });
+    };
+
+    checkSession();
+
+    return () => {
+      mounted = false;
+    };
   }, [navigate]);
 
   useEffect(() => {
@@ -70,6 +89,16 @@ const Login: React.FC = () => {
       setError("Identifiants incorrects ou problème réseau.");
       setLoading(false);
     } else {
+      const admin = await getCurrentAdminProfile();
+
+      if (!admin) {
+        await supabase.auth.signOut();
+        setError("Accès refusé. Ce compte n'est pas administrateur ou il est suspendu.");
+        setLoading(false);
+        return;
+      }
+
+      await touchAdminLogin(admin.id);
       navigate('/admin');
     }
   };
@@ -143,7 +172,7 @@ const Login: React.FC = () => {
           </button>
 
           <div className="form-footer">
-            <a href="#" className="forgot-link">Mot de passe oublié ?</a>
+            <a href="/forgot-password" className="forgot-link">Mot de passe oublié ?</a>
           </div>
         </form>
       </div>

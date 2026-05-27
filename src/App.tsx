@@ -8,6 +8,7 @@ import Reports from './pages/Reports';
 import ForgotPassword from './pages/ForgotPassword';
 import GlobalNotification from './pages/GlobalNotification';
 import Analytics from './pages/Analytics';
+import UsersManagement from './pages/UsersManagement';
 import './App.css';
 
 const App: React.FC = () => {
@@ -22,6 +23,7 @@ const App: React.FC = () => {
           <Route path="/admin" element={<Dashboard />} />
           <Route path="/admin/all" element={<Dashboard />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/users" element={<UsersManagement />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/global-notifications" element={<GlobalNotification />} />
         </Route>

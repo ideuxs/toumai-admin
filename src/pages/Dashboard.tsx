@@ -1,12 +1,33 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import { CheckCircle, XCircle, Clock, Package, Filter, ChevronRight, Eye, Search, X as XIcon, ArrowUpDown } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Package, Filter, ChevronRight, Eye, Search, X as XIcon, ArrowUpDown, Activity } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import AnnouncementCard from '../components/AnnouncementCard';
 import AnnouncementModal from '../components/AnnouncementModal';
 import RejectionModal from '../components/RejectionModal';
 import { sendRejectionEmail } from '../services/emailService';
+import { getCurrentAdminProfile, recordAdminAction, recordProductModerationEvent } from '../services/authService';
 import type { Announcement } from '../types';
+
+interface ModerationEvent {
+  id: number;
+  product_id: number;
+  admin_id: string | null;
+  action: string;
+  previous_state: string | null;
+  new_state: string | null;
+  reason: string | null;
+  created_at: string;
+  product?: { name: string | null } | null;
+  admin?: { firstname: string | null; lastname: string | null; email: string | null } | null;
+}
+
+type ModerationRelation<T> = T | T[] | null;
+
+interface SupabaseModerationEvent extends Omit<ModerationEvent, 'product' | 'admin'> {
+  product?: ModerationRelation<{ name: string | null }>;
+  admin?: ModerationRelation<{ firstname: string | null; lastname: string | null; email: string | null }>;
+}
 
 const Dashboard: React.FC = () => {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -18,6 +39,7 @@ const Dashboard: React.FC = () => {
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [pendingDeclineId, setPendingDeclineId] = useState<number | null>(null);
   const [pendingDeclineName, setPendingDeclineName] = useState<string>('');
+  const [moderationEvents, setModerationEvents] = useState<ModerationEvent[]>([]);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,10 +50,6 @@ const Dashboard: React.FC = () => {
   const currentView = location.pathname === '/admin/all' ? 'all' : 'dashboard';
 
   useEffect(() => {
-    fetchAnnounces();
-  }, []);
-
-  useEffect(() => {
     const total = announcements.length;
     const pending = announcements.filter(a => a.state === 'pending').length;
     const approved = announcements.filter(a => a.state === 'approved').length;
@@ -39,16 +57,56 @@ const Dashboard: React.FC = () => {
     setStats({ total, pending, approved, declined });
   }, [announcements]);
 
-  const fetchAnnounces = async () => {
-    setLoading(true);
+  const fetchAnnounces = useCallback(async () => {
     const { data, error } = await supabase.from('product').select('*');
     if (error) {
       console.error('Erreur lors du chargement:', error);
     } else {
       setAnnouncements(data || []);
     }
+  }, []);
+
+  const fetchModerationEvents = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('product_moderation_events')
+      .select(`
+        id,
+        product_id,
+        admin_id,
+        action,
+        previous_state,
+        new_state,
+        reason,
+        created_at,
+        product:product_id (name),
+        admin:admin_id (firstname, lastname, email)
+      `)
+      .order('created_at', { ascending: false })
+      .limit(8);
+
+    if (error) {
+      console.error('Erreur lors du chargement des événements de modération:', error);
+      return;
+    }
+
+    const normalized = ((data || []) as unknown as SupabaseModerationEvent[]).map((event) => ({
+      ...event,
+      product: Array.isArray(event.product) ? event.product[0] ?? null : event.product ?? null,
+      admin: Array.isArray(event.admin) ? event.admin[0] ?? null : event.admin ?? null,
+    }));
+
+    setModerationEvents(normalized);
+  }, []);
+
+  const refreshDashboardData = useCallback(async () => {
+    setLoading(true);
+    await Promise.all([fetchAnnounces(), fetchModerationEvents()]);
     setLoading(false);
-  };
+  }, [fetchAnnounces, fetchModerationEvents]);
+
+  useEffect(() => {
+    refreshDashboardData();
+  }, [refreshDashboardData]);
 
   const handleAction = async (id: number, action: 'approved' | 'declined') => {
     if (action === 'declined') {
@@ -63,22 +121,61 @@ const Dashboard: React.FC = () => {
 
   const executeAction = async (id: number, action: 'approved' | 'declined', rejectionReason?: string) => {
     try {
+      const admin = await getCurrentAdminProfile();
+
+      if (!admin) {
+        alert('Session admin invalide.');
+        return;
+      }
+
       const { data: product, error: fetchError } = await supabase
         .from('product')
-        .select('owner_id')
+        .select('owner_id, state, name')
         .eq('id_product', id)
         .maybeSingle();
 
-      if (fetchError || !product) return;
+      if (fetchError || !product) {
+        console.error('Erreur récupération annonce avant modération:', fetchError);
+        return;
+      }
 
       const { data: updatedProduct, error: updateError } = await supabase
         .from('product')
-        .update({ state: action })
+        .update({
+          state: action,
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: admin.id,
+        })
         .eq('id_product', id)
         .select('owner_id, state, id_product, name')
         .single();
 
-      if (updateError) return;
+      if (updateError) {
+        console.error('Erreur mise à jour annonce:', updateError);
+        return;
+      }
+
+      await Promise.all([
+        recordProductModerationEvent({
+          productId: id,
+          action,
+          previousState: product.state,
+          newState: action,
+          reason: rejectionReason,
+          metadata: { product_name: updatedProduct.name },
+        }),
+        recordAdminAction({
+          action: `product_${action}`,
+          targetType: 'product',
+          targetId: id,
+          reason: rejectionReason,
+          metadata: {
+            product_name: updatedProduct.name,
+            previous_state: product.state,
+            new_state: action,
+          },
+        }),
+      ]);
 
       const { data: user, error: userError } = await supabase
         .from('users')
@@ -86,10 +183,13 @@ const Dashboard: React.FC = () => {
         .eq('id', updatedProduct.owner_id)
         .single();
 
-      if (userError) return;
+      if (userError) {
+        console.error('Erreur récupération vendeur:', userError);
+        return;
+      }
 
       let message = '';
-      let title = 'Naria';
+      const title = 'Naria';
       let subtitle = '';
 
       if (action === 'approved') {
@@ -107,7 +207,9 @@ const Dashboard: React.FC = () => {
               productName: updatedProduct.name,
               rejectionReason: rejectionReason,
             });
-          } catch (emailError) {}
+          } catch (emailError) {
+            console.error('Erreur email refus:', emailError);
+          }
         }
       }
 
@@ -129,10 +231,14 @@ const Dashboard: React.FC = () => {
             body: JSON.stringify({ deviceToken, title, subtitle, body: message }),
           });
         }
-      } catch (notifyError) {}
+      } catch (notifyError) {
+        console.error('Erreur notification modération:', notifyError);
+      }
 
-      fetchAnnounces();
-    } catch (err) {}
+      await refreshDashboardData();
+    } catch (err) {
+      console.error('Erreur action modération:', err);
+    }
   };
 
   const handleDeclineWithReason = async (reason: string) => {
@@ -164,8 +270,14 @@ const Dashboard: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      // Simplification des logs pour la lisibilité
-      const { data: product } = await supabase.from('product').select('owner_id, name').eq('id_product', id).maybeSingle();
+      const admin = await getCurrentAdminProfile();
+
+      if (!admin) {
+        alert('Session admin invalide.');
+        return;
+      }
+
+      const { data: product } = await supabase.from('product').select('owner_id, name, state').eq('id_product', id).maybeSingle();
       
       let userFirstname = '';
       if (product?.owner_id) {
@@ -200,12 +312,25 @@ const Dashboard: React.FC = () => {
       const { error } = await supabase.from('product').delete().eq('id_product', id);
 
       if (error) {
+        console.error('Erreur suppression annonce:', error);
         alert('Erreur lors de la suppression de l\'annonce');
       } else {
+        await recordAdminAction({
+          action: 'product_deleted',
+          targetType: 'product',
+          targetId: id,
+          metadata: {
+            product_name: product?.name,
+            previous_state: product?.state,
+          },
+        });
+
         alert('Annonce supprimée avec succès');
-        fetchAnnounces();
+        await refreshDashboardData();
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error('Erreur suppression annonce:', err);
+    }
   };
 
   // Derive unique categories from all announcements
@@ -245,6 +370,26 @@ const Dashboard: React.FC = () => {
   const recentPending = announcements
     .filter(a => a.state === 'pending')
     .slice(0, 5);
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const getActionLabel = (action: string) => {
+    const labels: Record<string, string> = {
+      approved: 'Annonce approuvée',
+      declined: 'Annonce refusée',
+      restored: 'Annonce restaurée',
+      updated_by_admin: 'Annonce modifiée',
+    };
+
+    return labels[action] || action;
+  };
 
   if (loading) {
     return (
@@ -355,6 +500,45 @@ const Dashboard: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </div>
+
+          <div className="recent-section moderation-activity-section">
+            <div className="section-header">
+              <h3 className="section-title">Activité de modération</h3>
+              <Activity className="icon-sm" />
+            </div>
+
+            {moderationEvents.length === 0 ? (
+              <div className="empty-state compact-empty">
+                <Activity className="empty-icon" />
+                <h3 className="empty-title">Aucune action enregistrée</h3>
+                <p className="empty-text">Les validations et refus apparaîtront ici.</p>
+              </div>
+            ) : (
+              <div className="moderation-feed">
+                {moderationEvents.map((event) => {
+                  const adminName = `${event.admin?.firstname || ''} ${event.admin?.lastname || ''}`.trim() || event.admin?.email || 'Admin';
+
+                  return (
+                    <div key={event.id} className="moderation-feed-row">
+                      <div className={`moderation-action-dot action-${event.action}`} />
+                      <div className="moderation-feed-main">
+                        <div className="moderation-feed-title">
+                          <span>{getActionLabel(event.action)}</span>
+                          <span className="moderation-feed-date">{formatDateTime(event.created_at)}</span>
+                        </div>
+                        <div className="moderation-feed-meta">
+                          {event.product?.name || `Produit #${event.product_id}`} par {adminName}
+                        </div>
+                        {event.reason && (
+                          <div className="moderation-feed-reason">{event.reason}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

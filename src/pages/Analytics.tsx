@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Users, Package, Heart, ShieldAlert, ArrowUpRight, Minus } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Users, Package, Heart, ShieldAlert, ArrowUpRight, Minus, UserCheck, Ban, Bell, Activity } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import './Analytics.css';
 
@@ -15,6 +15,57 @@ interface TopFavProduct {
   id_product: number;
   name: string;
   count: number;
+}
+
+interface UserHealthStats {
+  active: number;
+  suspended: number;
+  banned: number;
+  withPushToken: number;
+  withPhone: number;
+  seenLast7Days: number;
+  inactive30Days: number;
+}
+
+interface ModerationStats {
+  pendingOlder24h: number;
+  avgPendingAgeHours: number;
+  liveReportedProducts: number;
+  approvalRate: number;
+  declineRate: number;
+  eventsLast7Days: number;
+}
+
+interface AdminActivity {
+  adminId: string;
+  name: string;
+  email: string;
+  count: number;
+}
+
+interface CategoryValue {
+  name: string;
+  count: number;
+  totalValue: number;
+  avgPrice: number;
+}
+
+interface ProductModerationEvent {
+  action: string;
+  created_at: string;
+}
+
+interface AdminLogRow {
+  admin_id: string | null;
+  action: string;
+  created_at: string;
+  admin?: { firstname: string | null; lastname: string | null; email: string | null } | { firstname: string | null; lastname: string | null; email: string | null }[] | null;
+}
+
+interface ReportAnalyticsRow {
+  id_product: number;
+  category_report: string | null;
+  product?: { state: string | null } | { state: string | null }[] | null;
 }
 
 const Analytics: React.FC = () => {
@@ -41,23 +92,48 @@ const Analytics: React.FC = () => {
   // --- TOP SELLERS ---
   const [topSellers, setTopSellers] = useState<TopSeller[]>([]);
 
-  useEffect(() => {
-    fetchAllData();
-  }, []);
+  // --- OPERATIONS ---
+  const [userHealth, setUserHealth] = useState<UserHealthStats>({
+    active: 0,
+    suspended: 0,
+    banned: 0,
+    withPushToken: 0,
+    withPhone: 0,
+    seenLast7Days: 0,
+    inactive30Days: 0,
+  });
+  const [moderationStats, setModerationStats] = useState<ModerationStats>({
+    pendingOlder24h: 0,
+    avgPendingAgeHours: 0,
+    liveReportedProducts: 0,
+    approvalRate: 0,
+    declineRate: 0,
+    eventsLast7Days: 0,
+  });
+  const [adminActivity, setAdminActivity] = useState<AdminActivity[]>([]);
+  const [categoryValue, setCategoryValue] = useState<CategoryValue[]>([]);
 
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async () => {
     setLoading(true);
     await Promise.all([
       fetchUsers(),
       fetchProducts(),
       fetchFavourites(),
       fetchReports(),
+      fetchModerationActivity(),
+      fetchAdminActivity(),
     ]);
     setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
 
   const fetchUsers = async () => {
-    const { data, error } = await supabase.from('users').select('id, firstname, lastname, email, created_at, is_admin');
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, firstname, lastname, email, phone, created_at, is_admin, status, token_apn, expo_push_token, last_seen_at');
     if (error || !data) return;
 
     const nonAdmin = data.filter(u => !u.is_admin);
@@ -67,10 +143,25 @@ const Analytics: React.FC = () => {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const newThisMonth = nonAdmin.filter(u => new Date(u.created_at) >= startOfMonth).length;
     setNewUsersMonth(newThisMonth);
+
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+
+    setUserHealth({
+      active: nonAdmin.filter(u => !u.status || u.status === 'active').length,
+      suspended: nonAdmin.filter(u => u.status === 'suspended').length,
+      banned: nonAdmin.filter(u => u.status === 'banned').length,
+      withPushToken: nonAdmin.filter(u => Boolean(u.token_apn || u.expo_push_token)).length,
+      withPhone: nonAdmin.filter(u => Boolean(u.phone)).length,
+      seenLast7Days: nonAdmin.filter(u => u.last_seen_at && new Date(u.last_seen_at) >= sevenDaysAgo).length,
+      inactive30Days: nonAdmin.filter(u => !u.last_seen_at || new Date(u.last_seen_at) < thirtyDaysAgo).length,
+    });
   };
 
   const fetchProducts = async () => {
-    const { data, error } = await supabase.from('product').select('id_product, name, price, category, state, owner_id, created_at');
+    const { data, error } = await supabase.from('product').select('id_product, name, price, category, state, owner_id, created_at, reviewed_at');
     if (error || !data) return;
 
     setTotalProducts(data.length);
@@ -99,6 +190,40 @@ const Analytics: React.FC = () => {
     const prices = data.filter(p => p.price && p.price > 0).map(p => p.price);
     const avg = prices.length > 0 ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0;
     setAvgPrice(avg);
+
+    const now = new Date();
+    const oneDayAgo = new Date(now);
+    oneDayAgo.setDate(now.getDate() - 1);
+    const pendingProducts = data.filter(p => p.state === 'pending');
+    const pendingAges = pendingProducts.map(p => Math.max(0, now.getTime() - new Date(p.created_at).getTime()));
+    const approvedCount = data.filter(p => p.state === 'approved').length;
+    const declinedCount = data.filter(p => p.state === 'declined').length;
+    const reviewedCount = approvedCount + declinedCount;
+
+    setModerationStats(prev => ({
+      ...prev,
+      pendingOlder24h: pendingProducts.filter(p => new Date(p.created_at) < oneDayAgo).length,
+      avgPendingAgeHours: pendingAges.length ? Math.round((pendingAges.reduce((a, b) => a + b, 0) / pendingAges.length) / 36_000) / 100 : 0,
+      approvalRate: reviewedCount ? Math.round((approvedCount / reviewedCount) * 100) : 0,
+      declineRate: reviewedCount ? Math.round((declinedCount / reviewedCount) * 100) : 0,
+    }));
+
+    const categoryStats = Object.values(data.reduce<Record<string, CategoryValue>>((acc, product) => {
+      const name = product.category || 'Non catégorisé';
+      const price = product.price || 0;
+      if (!acc[name]) {
+        acc[name] = { name, count: 0, totalValue: 0, avgPrice: 0 };
+      }
+
+      acc[name].count += 1;
+      acc[name].totalValue += price;
+      acc[name].avgPrice = Math.round(acc[name].totalValue / acc[name].count);
+      return acc;
+    }, {}))
+      .sort((a, b) => b.totalValue - a.totalValue)
+      .slice(0, 5);
+
+    setCategoryValue(categoryStats);
 
     // Top 30 vendeurs
     const sellerCount: Record<string, number> = {};
@@ -158,20 +283,97 @@ const Analytics: React.FC = () => {
   };
 
   const fetchReports = async () => {
-    const { data, error } = await supabase.from('report_user').select('id_user, category_report');
+    const { data, error } = await supabase
+      .from('report_user')
+      .select(`
+        id_product,
+        category_report,
+        product:id_product (state)
+      `);
     if (error || !data) return;
 
     setTotalReports(data.length);
 
     const byCat: Record<string, number> = {};
-    data.forEach(r => {
+    const reportedLiveProductIds = new Set<number>();
+
+    (data as unknown as ReportAnalyticsRow[]).forEach(r => {
       const c = r.category_report || 'Autre';
       byCat[c] = (byCat[c] || 0) + 1;
+
+      const product = Array.isArray(r.product) ? r.product[0] : r.product;
+      if (product?.state === 'approved') {
+        reportedLiveProductIds.add(r.id_product);
+      }
     });
+
     const catArray = Object.entries(byCat)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count);
     setReportsByCategory(catArray);
+
+    setModerationStats(prev => ({
+      ...prev,
+      liveReportedProducts: reportedLiveProductIds.size,
+    }));
+  };
+
+  const fetchModerationActivity = async () => {
+    const { data, error } = await supabase
+      .from('product_moderation_events')
+      .select('action, created_at')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (error || !data) return;
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const recentEvents = (data as ProductModerationEvent[]).filter(event => new Date(event.created_at) >= sevenDaysAgo);
+
+    setModerationStats(prev => ({
+      ...prev,
+      eventsLast7Days: recentEvents.length,
+    }));
+  };
+
+  const fetchAdminActivity = async () => {
+    const { data, error } = await supabase
+      .from('admin_action_logs')
+      .select(`
+        admin_id,
+        action,
+        created_at,
+        admin:admin_id (firstname, lastname, email)
+      `)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error || !data) return;
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const grouped = (data as unknown as AdminLogRow[])
+      .filter(row => row.admin_id && new Date(row.created_at) >= sevenDaysAgo)
+      .reduce<Record<string, AdminActivity>>((acc, row) => {
+        const admin = Array.isArray(row.admin) ? row.admin[0] : row.admin;
+        const adminId = row.admin_id || 'unknown';
+        const name = `${admin?.firstname || ''} ${admin?.lastname || ''}`.trim() || admin?.email || 'Admin';
+
+        if (!acc[adminId]) {
+          acc[adminId] = {
+            adminId,
+            name,
+            email: admin?.email || '',
+            count: 0,
+          };
+        }
+
+        acc[adminId].count += 1;
+        return acc;
+      }, {});
+
+    setAdminActivity(Object.values(grouped).sort((a, b) => b.count - a.count).slice(0, 5));
   };
 
   const stateLabels: Record<string, string> = {
@@ -392,6 +594,115 @@ const Analytics: React.FC = () => {
             )) : (
               <div className="neutral-text" style={{ padding: '2rem 0', textAlign: 'center' }}>Aucun signalement actif.</div>
             )}
+          </div>
+        </div>
+      </section>
+
+      <section className="ops-section">
+        <div className="ops-metrics-grid">
+          <div className="ops-metric">
+            <div className="ops-metric-top">
+              <span>Annonces signalées en ligne</span>
+              <ShieldAlert size={16} />
+            </div>
+            <strong>{moderationStats.liveReportedProducts}</strong>
+            <p>Produits encore visibles malgré au moins un signalement.</p>
+          </div>
+
+          <div className="ops-metric">
+            <div className="ops-metric-top">
+              <span>En attente depuis 24h</span>
+              <Package size={16} />
+            </div>
+            <strong>{moderationStats.pendingOlder24h}</strong>
+            <p>À traiter en priorité pour éviter file morte.</p>
+          </div>
+
+          <div className="ops-metric">
+            <div className="ops-metric-top">
+              <span>Taux validation</span>
+              <UserCheck size={16} />
+            </div>
+            <strong>{moderationStats.approvalRate}%</strong>
+            <p>{moderationStats.declineRate}% refusées sur annonces revues.</p>
+          </div>
+
+          <div className="ops-metric">
+            <div className="ops-metric-top">
+              <span>Actions admin 7j</span>
+              <Activity size={16} />
+            </div>
+            <strong>{moderationStats.eventsLast7Days}</strong>
+            <p>Validations et refus enregistrés récemment.</p>
+          </div>
+        </div>
+
+        <div className="ops-panels-grid">
+          <div className="min-panel">
+            <div className="panel-head">
+              <h2 className="panel-title-sm">Santé utilisateurs</h2>
+            </div>
+            <div className="ops-list">
+              <div className="ops-list-row">
+                <span><UserCheck size={14} /> Actifs</span>
+                <strong>{userHealth.active}</strong>
+              </div>
+              <div className="ops-list-row">
+                <span><Ban size={14} /> Suspendus / bannis</span>
+                <strong>{userHealth.suspended + userHealth.banned}</strong>
+              </div>
+              <div className="ops-list-row">
+                <span><Bell size={14} /> Push disponible</span>
+                <strong>{totalUsers ? Math.round((userHealth.withPushToken / totalUsers) * 100) : 0}%</strong>
+              </div>
+              <div className="ops-list-row">
+                <span><Users size={14} /> Actifs 7 derniers jours</span>
+                <strong>{userHealth.seenLast7Days}</strong>
+              </div>
+              <div className="ops-list-row muted">
+                <span>Inactifs 30 jours</span>
+                <strong>{userHealth.inactive30Days}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="min-panel">
+            <div className="panel-head">
+              <h2 className="panel-title-sm">Valeur par catégorie</h2>
+            </div>
+            <div className="ops-list">
+              {categoryValue.length > 0 ? categoryValue.map((item) => (
+                <div key={item.name} className="ops-category-row">
+                  <div>
+                    <strong>{item.name}</strong>
+                    <span>{item.count} annonce{item.count > 1 ? 's' : ''} · moyen {item.avgPrice.toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                  <b>{item.totalValue.toLocaleString('fr-FR')} FCFA</b>
+                </div>
+              )) : (
+                <div className="neutral-text">Aucune catégorie analysable.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="min-panel">
+            <div className="panel-head">
+              <h2 className="panel-title-sm">Admins actifs</h2>
+            </div>
+            <div className="ops-list">
+              {adminActivity.length > 0 ? adminActivity.map((admin, index) => (
+                <div key={admin.adminId} className="ops-admin-row">
+                  <span>{index + 1}</span>
+                  <div>
+                    <strong>{admin.name}</strong>
+                    {admin.email && <em>{admin.email}</em>}
+                  </div>
+                  <b>{admin.count}</b>
+                </div>
+              )) : (
+                <div className="neutral-text">Aucune action admin sur 7 jours.</div>
+              )}
+            </div>
           </div>
         </div>
       </section>
